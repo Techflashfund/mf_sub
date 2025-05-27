@@ -23,3 +23,4 @@ urlpatterns = [
     path('', include('ondc.urls')),
     path('ondc-site-verification.html', ondc_site_verification, name='ondc_site_verification')
 ]
+

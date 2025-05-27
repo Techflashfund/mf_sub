@@ -12,11 +12,14 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey,X2
 from cryptography.hazmat.primitives import serialization
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
+from dotenv import load_dotenv
+load_dotenv()
 
-f = open(os.getenv("REQUEST_BODY_PATH", "request_body_raw_text.txt"), "r")
-request_body_raw_text = f.read()
-request_body_raw_text = json.loads(request_body_raw_text) # parse the string into a python dictionary object
-request_body_raw_text = json.dumps(request_body_raw_text, separators=(',', ':')) #minify the payload to remove any extra spaces and line breaks 
+
+# f = open(os.getenv("REQUEST_BODY_PATH", "request_body_raw_text.txt"), "r")
+# request_body_raw_text = f.read()
+# request_body_raw_text = json.loads(request_body_raw_text) # parse the string into a python dictionary object
+# request_body_raw_text = json.dumps(request_body_raw_text, separators=(',', ':')) #minify the payload to remove any extra spaces and line breaks 
 
 def hash_message(msg: str):
     HASHER = nacl.hash.blake2b
@@ -65,7 +68,7 @@ def get_filter_dictionary_or_operation(filter_string):
     return filter_dictionary_or_operation
 
 
-def create_authorisation_header(request_body=request_body_raw_text, created=None, expires=None):
+def create_authorisation_header(request_body, created=None, expires=None):
     created = int(datetime.datetime.now().timestamp()) if created is None else created
     expires = int((datetime.datetime.now() + datetime.timedelta(hours=1)).timestamp()) if expires is None else expires
     signing_key = create_signing_string(hash_message(request_body),
@@ -73,13 +76,13 @@ def create_authorisation_header(request_body=request_body_raw_text, created=None
     signature = sign_response(signing_key, private_key=os.getenv("PRIVATE_KEY"))
 
     subscriber_id = os.getenv("SUBSCRIBER_ID", "buyer-app.ondc.org")
-    unique_key_id = os.getenv("UNIQUE_KEY_ID", "207")
+    unique_key_id = os.getenv("UNIQUE_KEY_ID")
     header = f'"Signature keyId="{subscriber_id}|{unique_key_id}|ed25519",algorithm="ed25519",created=' \
              f'"{created}",expires="{expires}",headers="(created) (expires) digest",signature="{signature}""'
     return header
 
 
-def verify_authorisation_header(auth_header, request_body_str=request_body_raw_text,
+def verify_authorisation_header(auth_header, request_body_str=None,
                                 public_key=os.getenv("PUBLIC_KEY")):
     # `request_body_str` should request.data i.e. raw data string
 

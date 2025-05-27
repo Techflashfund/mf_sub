@@ -77,3 +77,112 @@ def on_subscribe(request):
             return JsonResponse({"error": str(e)}, status=400)
 
     return JsonResponse({"error": "Invalid method"}, status=405)
+
+
+
+
+import os
+import json
+import base64
+import requests
+from datetime import datetime, timedelta
+from nacl.signing import SigningKey
+from nacl.bindings import crypto_sign_ed25519_sk_to_seed
+from dotenv import load_dotenv
+from .cryptic_utils import create_authorisation_header
+load_dotenv()
+from datetime import datetime, timezone
+
+# Load keys and config from .env
+SIGNING_PRIVATE_KEY_BASE64 = os.getenv("Signing_private_key")
+SIGNING_PUBLIC_KEY = os.getenv("Signing_public_key")
+ENCRYPTION_PUBLIC_KEY = os.getenv("Encryption_Publickey")
+SUBSCRIBER_ID = os.getenv("SUBSCRIBER_ID")
+UNIQUE_KEY_ID = os.getenv("UNIQUE_KEY_ID")
+request_id="f5afc11d-c789-4079-949c-8bd4d23a8571"
+
+def timestamp(date=None):
+    if date is None:
+        date = datetime.now(timezone.utc)  # current time in UTC
+    # Returns ISO 8601 format with 'Z' for UTC timezone
+    return date.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+def get_valid_until_timestamp():
+    current_date = datetime.now(timezone.utc)
+    # Add 2 years using timedelta (approximate as 730 days)
+    # For exact 2 years accounting leap years, use dateutil.relativedelta
+    from dateutil.relativedelta import relativedelta
+    future_date = current_date + relativedelta(years=2)
+    return future_date.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+
+@csrf_exempt
+def subscribe(request):
+    if request.method == 'POST':
+        payload={
+    "context": {
+        "operation": {
+            "ops_no": 1
+        }
+    },
+    "message": {
+        "request_id":"f5afc11d-c789-4079-949c-8bd4d23a8571",
+        "timestamp": timestamp(),
+        "entity": {
+            "gst": {
+                "legal_entity_name": "BANCWISE TECHNOLOGIES LLP",
+                "business_address": "51/1702, First Floor, Civil Lane Road, West Fort, Thrissur - Kerala -680006, IN",
+                "city_code": ["std:487"],
+                "gst_no": "32ABDFB1579P1Z6"
+            },
+            "pan": {
+                "name_as_per_pan": "BANCWISE TECHNOLOGIES LLP",
+                "pan_no": "ABDFB1579P",
+                "date_of_incorporation": "10/06/2024"
+            },
+            "name_of_authorised_signatory": "SIJO PAUL E",
+            "address_of_authorised_signatory": "2/1384, Plot No 326, 15th Street, Harinagar, P O Punkunnam, Thrissur- 680002, Kerala, India",
+            "email_id": "sijo.paul@flashfund.in",
+            "mobile_no": 9995103430,
+            "country": "IND",
+            "subscriber_id":"investment.preprod.vyable.in",
+            "unique_key_id": "b2a8f240-c280-4399-8979-1d13de9a64a0",
+            "callback_url":"/",
+            "key_pair": {
+                "signing_public_key":"ZC4WOXoQgoAmxZPz5VqobhDc4l05A9Lh+TWeKtwC3co=",
+                "encryption_public_key":"MCowBQYDK2VuAyEAVFXINjXoWGPZ4zshbPwugbm9A932PjH3fey6D3nvOxk=",
+                "valid_from":timestamp(),
+                "valid_until":get_valid_until_timestamp()
+            }
+        },
+        "network_participant": [
+            {
+                "subscriber_url": "/",
+                "domain": "ONDC:FIS14",
+                "type": "buyerApp",
+                "msn": False,
+                "city_code": ["std:487"]
+            }
+        ]
+    }
+}
+        json_payload = json.dumps(payload, separators=(',', ':'))  # Minified json
+        authorization_header = create_authorisation_header(json_payload)
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": authorization_header
+        }
+
+        response = requests.post(
+            "https://staging.registry.ondc.org/subscribe",
+            headers=headers,
+            data=json_payload
+        )
+        return JsonResponse({
+            "status_code": response.status_code,
+            "response": response.json() if response.headers.get('Content-Type') == 'application/json' else response.text
+        })
+
+    return HttpResponse("Only POST method is allowed.", status=405)
+
+
