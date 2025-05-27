@@ -9,7 +9,9 @@ from cryptography.hazmat.primitives import serialization
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 from dotenv import load_dotenv
+import logging
 
+logger = logging.getLogger(__name__)
 load_dotenv()
 # Create your views here.
 
@@ -55,7 +57,8 @@ def on_subscribe(request):
         try:
             body = json.loads(request.body)
             challenge_string = body["message"]["challenge"]
-            print("Challenge String:", challenge_string)
+            logger.info(f"Challenge String: {challenge_string}")
+
 
             # Use ONDC public key for the correct environment
             ondc_public_key = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="  # pre-prod
