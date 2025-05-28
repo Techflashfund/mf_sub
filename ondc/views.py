@@ -96,40 +96,63 @@ def decrypt_challenge(encrypted_challenge, shared_key):
     decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
     return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
 
+import base64
+import json
 import traceback
+import logging
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
 
+logging.basicConfig(level=logging.DEBUG)
+
 @csrf_exempt
 def on_subscribe(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            encrypted_challenge = data.get("challenge")
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request method"}, status=400)
 
-            private_key_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
-            private_key = serialization.load_der_private_key(private_key_der, password=None)
+    try:
+        data = json.loads(request.body)
+        encrypted_challenge = data.get("challenge")
+        if not encrypted_challenge:
+            return JsonResponse({"error": "Missing 'challenge' in request"}, status=400)
 
-            # ONDC staging public key (DER format)
-            ondc_public_key_der = base64.b64decode("MCowBQYDK2VuAyEAduMuZgmtpjdCuxv+Nc49K0cB6tL/Dj3HZetvVN7ZekM=")
-            public_key = serialization.load_der_public_key(ondc_public_key_der)
+        logging.debug(f"Encrypted challenge (base64): {encrypted_challenge}")
 
-            shared_key = private_key.exchange(public_key)
+        # Load your private key from DER base64 string (hardcoded here for demo)
+        private_key_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
+        private_key = serialization.load_der_private_key(private_key_der, password=None)
 
-            cipher = AES.new(shared_key, AES.MODE_ECB)
-            decrypted = cipher.decrypt(base64.b64decode(encrypted_challenge))
-            challenge_answer = unpad(decrypted, AES.block_size).decode('utf-8')
+        # Load ONDC public key (staging, DER base64)
+        ondc_public_key_der = base64.b64decode("MCowBQYDK2VuAyEAduMuZgmtpjdCuxv+Nc49K0cB6tL/Dj3HZetvVN7ZekM=")
+        ondc_public_key = serialization.load_der_public_key(ondc_public_key_der)
 
-            return JsonResponse({"answer": challenge_answer})
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return JsonResponse({"error": str(e)}, status=500)
+        # Perform X25519 key exchange to get shared key
+        shared_key = private_key.exchange(ondc_public_key)
+        logging.debug(f"Shared key (hex): {shared_key.hex()}")
 
-    return JsonResponse({"error": "Invalid request"}, status=400)
+        encrypted_bytes = base64.b64decode(encrypted_challenge)
+        logging.debug(f"Encrypted challenge bytes (hex): {encrypted_bytes.hex()}")
+
+        # AES ECB decrypt
+        cipher = AES.new(shared_key, AES.MODE_ECB)
+        decrypted_bytes = cipher.decrypt(encrypted_bytes)
+        logging.debug(f"Decrypted bytes (hex): {decrypted_bytes.hex()}")
+
+        # Try unpadding
+        challenge_answer = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+        logging.debug(f"Decrypted and unpadded challenge answer: {challenge_answer}")
+
+        return JsonResponse({"answer": challenge_answer})
+
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
+
 
 
 
