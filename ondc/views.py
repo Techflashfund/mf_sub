@@ -143,9 +143,14 @@ def on_subscribe(request):
         decrypted_bytes = cipher.decrypt(encrypted_bytes)
         logging.debug(f"Decrypted bytes (hex): {decrypted_bytes.hex()}")
 
-        # Try unpadding
-        challenge_answer = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
-        logging.debug(f"Decrypted and unpadded challenge answer: {challenge_answer}")
+        # Try unpadding, fallback to stripping null bytes if padding is incorrect
+        try:
+            challenge_answer = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+        except ValueError:
+            logging.warning("PKCS#7 padding incorrect, using fallback decoding")
+            challenge_answer = decrypted_bytes.rstrip(b"\x00").decode('utf-8', errors='ignore')
+
+        logging.debug(f"Decrypted challenge answer (fallback applied if needed): {challenge_answer}")
 
         return JsonResponse({"answer": challenge_answer})
 
