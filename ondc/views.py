@@ -96,6 +96,8 @@ def decrypt_challenge(encrypted_challenge, shared_key):
     decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
     return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
 
+import traceback
+
 @csrf_exempt
 def on_subscribe(request):
     if request.method == "POST":
@@ -103,28 +105,36 @@ def on_subscribe(request):
             data = json.loads(request.body)
             encrypted_challenge = data.get("challenge")
 
-            # Load encryption private key (correct way)
             encryption_private_key_base64 = os.getenv("ENCRYPTION_PRIVATE_KEY")
+            if not encryption_private_key_base64:
+                raise ValueError("Encryption_Privatekey is missing in environment variables.")
+
             encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
 
+            # Load our private key (DER format)
             private_key = serialization.load_der_private_key(
                 encryption_private_key_bytes,
                 password=None
             )
 
-            # Load ONDC public key
-            ondc_public_key_bytes = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
-            public_key = serialization.load_der_public_key(ondc_public_key_bytes)
+            # Load ONDC public key (DER format)
+            ondc_public_key_base64 = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q=" 
+            public_key = serialization.load_der_public_key(base64.b64decode(ondc_public_key_base64))
 
-            # Generate shared key
+            # Create shared key
             shared_key = private_key.exchange(public_key)
 
-            # Decrypt the challenge
-            decrypted_challenge = decrypt_challenge(encrypted_challenge, shared_key)
+            # Decrypt
+            cipher = AES.new(shared_key, AES.MODE_ECB)
+            decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
+            from Crypto.Util.Padding import unpad
+            decrypted_challenge = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
 
             return JsonResponse({"answer": decrypted_challenge})
 
         except Exception as e:
+            print("----- ERROR in /on_subscribe -----")
+            traceback.print_exc()
             return JsonResponse({"error": str(e)}, status=500)
 
     return JsonResponse({"error": "Invalid request"}, status=400)
