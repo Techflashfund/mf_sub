@@ -156,7 +156,7 @@ def subscribe(request):
         },
         "network_participant": [
             {
-                "subscriber_url": "/",
+                "subscriber_url":"/",
                 "domain": "ONDC:FIS14",
                 "type": "buyerApp",
                 "msn": False,
@@ -164,8 +164,9 @@ def subscribe(request):
             }
         ]
     }
-}
-        json_payload = json.dumps(payload, separators=(',', ':'))  # Minified json
+}       
+
+        json_payload = json.dumps(payload, separators=(',', ':'))
         authorization_header = create_authorisation_header(json_payload)
 
         headers = {
@@ -174,10 +175,11 @@ def subscribe(request):
         }
 
         response = requests.post(
-            "https://staging.registry.ondc.org/subscribe",
+            "https://preprod.registry.ondc.org/ondc/subscribe",
             headers=headers,
             data=json_payload
         )
+        print(response)
         return JsonResponse({
             "status_code": response.status_code,
             "response": response.json() if response.headers.get('Content-Type') == 'application/json' else response.text
