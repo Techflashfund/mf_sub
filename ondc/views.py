@@ -30,54 +30,104 @@ def ondc_site_verification(request):
     )
 
 
-def decrypt_challenge(encryption_private_key_b64: str, ondc_public_key_b64: str, challenge_string_b64: str) -> str:
-    # Load keys
-    private_key = serialization.load_der_private_key(
-        b64decode(encryption_private_key_b64),
-        password=None,
-    )
-    public_key = serialization.load_der_public_key(
-        b64decode(ondc_public_key_b64)
-    )
+# def decrypt_challenge(encryption_private_key_b64: str, ondc_public_key_b64: str, challenge_string_b64: str) -> str:
+#     # Load keys
+#     private_key = serialization.load_der_private_key(
+#         b64decode(encryption_private_key_b64),
+#         password=None,
+#     )
+#     public_key = serialization.load_der_public_key(
+#         b64decode(ondc_public_key_b64)
+#     )
 
-    # Derive shared key
-    shared_key = private_key.exchange(public_key)
+#     # Derive shared key
+#     shared_key = private_key.exchange(public_key)
 
-    # Decrypt AES-ECB
+#     # Decrypt AES-ECB
+#     cipher = AES.new(shared_key, AES.MODE_ECB)
+#     decrypted = unpad(cipher.decrypt(b64decode(challenge_string_b64)), AES.block_size)
+
+#     return decrypted.decode('utf-8')
+
+
+
+# @csrf_exempt
+# def on_subscribe(request):
+#     if request.method == 'POST':
+#         try:
+#             body = json.loads(request.body)
+#             challenge_string = body["message"]["challenge"]
+#             logger.info(f"Challenge String: {challenge_string}")
+
+
+#             # Use ONDC public key for the correct environment
+#             ondc_public_key = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="  # pre-prod
+#             encryption_private_key = os.getenv("ENCRYPTION_PRIVATE_KEY")
+
+#             if not encryption_private_key:
+#                 return JsonResponse({"error": "Missing ENCRYPTION_PRIVATE_KEY env variable"}, status=500)
+
+#             answer = decrypt_challenge(ondc_public_key, encryption_private_key, challenge_string)
+
+#             return JsonResponse({
+#                 "answer": answer
+#             })
+
+#         except Exception as e:
+#             return JsonResponse({"error": str(e)}, status=400)
+
+#     return JsonResponse({"error": "Invalid method"}, status=405)
+
+
+import os
+import json
+import base64
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import x25519
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+
+ONDC_PUBLIC_KEY_BASE64 = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="
+
+def decrypt_challenge(encrypted_challenge, shared_key):
     cipher = AES.new(shared_key, AES.MODE_ECB)
-    decrypted = unpad(cipher.decrypt(b64decode(challenge_string_b64)), AES.block_size)
-
-    return decrypted.decode('utf-8')
-
-
+    decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
+    return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
 
 @csrf_exempt
 def on_subscribe(request):
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            body = json.loads(request.body)
-            challenge_string = body["message"]["challenge"]
-            logger.info(f"Challenge String: {challenge_string}")
+            data = json.loads(request.body)
+            encrypted_challenge = data.get("challenge")
 
+            # Load encryption private key (correct way)
+            encryption_private_key_base64 = os.getenv("ENCRYPTION_PRIVATE_KEY")
+            encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
 
-            # Use ONDC public key for the correct environment
-            ondc_public_key = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="  # pre-prod
-            encryption_private_key = os.getenv("ENCRYPTION_PRIVATE_KEY")
+            private_key = serialization.load_der_private_key(
+                encryption_private_key_bytes,
+                password=None
+            )
 
-            if not encryption_private_key:
-                return JsonResponse({"error": "Missing ENCRYPTION_PRIVATE_KEY env variable"}, status=500)
+            # Load ONDC public key
+            ondc_public_key_bytes = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
+            public_key = serialization.load_der_public_key(ondc_public_key_bytes)
 
-            answer = decrypt_challenge(ondc_public_key, encryption_private_key, challenge_string)
+            # Generate shared key
+            shared_key = private_key.exchange(public_key)
 
-            return JsonResponse({
-                "answer": answer
-            })
+            # Decrypt the challenge
+            decrypted_challenge = decrypt_challenge(encrypted_challenge, shared_key)
+
+            return JsonResponse({"answer": decrypted_challenge})
 
         except Exception as e:
-            return JsonResponse({"error": str(e)}, status=400)
+            return JsonResponse({"error": str(e)}, status=500)
 
-    return JsonResponse({"error": "Invalid method"}, status=405)
-
+    return JsonResponse({"error": "Invalid request"}, status=400)
 
 
 
