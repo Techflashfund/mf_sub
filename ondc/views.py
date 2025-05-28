@@ -110,7 +110,7 @@ def on_subscribe(request):
             data = json.loads(request.body)
             encrypted_challenge = data.get("challenge")
 
-            private_key_der = base64.b64decode(os.getenv("ENCRYPTION_PRIVATE_KEY"))
+            private_key_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
             private_key = serialization.load_der_private_key(private_key_der, password=None)
 
             # ONDC staging public key (DER format)
