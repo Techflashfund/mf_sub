@@ -154,9 +154,9 @@ load_dotenv()
 from datetime import datetime, timezone
 
 # Load keys and config from .env
-SIGNING_PRIVATE_KEY_BASE64 = os.getenv("Signing_private_key")
-SIGNING_PUBLIC_KEY = os.getenv("Signing_public_key")
-ENCRYPTION_PUBLIC_KEY = os.getenv("Encryption_Publickey")
+SIGNING_PRIVATE_KEY_BASE64 = os.getenv("PRIVATE_KEY")
+SIGNING_PUBLIC_KEY = os.getenv("PUBLIC_KEY")
+ENCRYPTION_PUBLIC_KEY = os.getenv("ENCRYPTION_PUBLIC_KEY")
 SUBSCRIBER_ID = os.getenv("SUBSCRIBER_ID")
 UNIQUE_KEY_ID = os.getenv("UNIQUE_KEY_ID")
 request_id="f5afc11d-c789-4079-949c-8bd4d23a8571"
