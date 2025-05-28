@@ -159,45 +159,71 @@ import traceback
 #         return JsonResponse({"error": str(e)}, status=500)
 
 
-def decrypt_challenge(encrypted_challenge, shared_key):
-    cipher = AES.new(shared_key, AES.MODE_ECB)
-    decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
-    return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+
+import base64
+import os
+import json
+import traceback
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+
+# Pick the correct ONDC public key for your env:
+ONDC_PUBLIC_KEY_BASE64 = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="
+
+def derive_aes_key(raw_shared_secret: bytes) -> bytes:
+    # Option A: simple SHA-256 (32-byte output)
+    digest = hashes.Hash(hashes.SHA256())
+    digest.update(raw_shared_secret)
+    return digest.finalize()
+
+    # —OR— Option B: HKDF(SHA-256)
+    # return HKDF(
+    #     algorithm=hashes.SHA256(),
+    #     length=32,
+    #     salt=None,
+    #     info=b"ONDC Subscription",
+    # ).derive(raw_shared_secret)
+
+def decrypt_challenge(encrypted_b64: str, aes_key: bytes) -> str:
+    data = base64.b64decode(encrypted_b64)
+    cipher = AES.new(aes_key, AES.MODE_ECB)
+    plain = cipher.decrypt(data)
+    return unpad(plain, AES.block_size).decode("utf-8")
 
 @csrf_exempt
 def on_subscribe(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            encrypted_challenge = data.get("challenge")
+    if request.method != "POST":
+        return JsonResponse({"error": "Invalid request"}, status=400)
+    try:
+        payload = json.loads(request.body)
+        encrypted_challenge = payload["challenge"]
 
-            # Load encryption private key (correct way)
-            encryption_private_key_base64 = "MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV"
-            encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
+        # 1) Load your X25519 private key
+        priv_der = base64.b64decode(os.getenv("Encryption_Privatekey"))
+        priv = serialization.load_der_private_key(priv_der, password=None)
 
-            private_key = serialization.load_der_private_key(
-                encryption_private_key_bytes,
-                password=None
-            )
+        # 2) Load ONDC’s X25519 public key
+        pub_der = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
+        pub = serialization.load_der_public_key(pub_der)
 
-            # Load ONDC public key
-            ondc_public_key_bytes = base64.b64decode("MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q=")
-            public_key = serialization.load_der_public_key(ondc_public_key_bytes)
+        # 3) ECDH: raw 32-byte shared secret
+        shared_secret = priv.exchange(pub)
 
-            # Generate shared key
-            shared_key = private_key.exchange(public_key)
+        # 4) Derive AES key via SHA-256 (or HKDF)
+        aes_key = derive_aes_key(shared_secret)
 
-            # Decrypt the challenge
-            decrypted_challenge = decrypt_challenge(encrypted_challenge, shared_key)
+        # 5) Decrypt & unpad
+        answer = decrypt_challenge(encrypted_challenge, aes_key)
+        return JsonResponse({"answer": answer})
 
-            return JsonResponse({"answer": decrypted_challenge})
-
-        except Exception as e:
-            traceback.print_exc()
-            return JsonResponse({"error": str(e)}, status=500)
-
-    return JsonResponse({"error": "Invalid request"}, status=400)
-
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 
