@@ -98,6 +98,11 @@ def decrypt_challenge(encrypted_challenge, shared_key):
 
 import traceback
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+
 @csrf_exempt
 def on_subscribe(request):
     if request.method == "POST":
@@ -105,35 +110,22 @@ def on_subscribe(request):
             data = json.loads(request.body)
             encrypted_challenge = data.get("challenge")
 
-            encryption_private_key_base64 = os.getenv("ENCRYPTION_PRIVATE_KEY")
-            if not encryption_private_key_base64:
-                raise ValueError("Encryption_Privatekey is missing in environment variables.")
+            private_key_der = base64.b64decode(os.getenv("ENCRYPTION_PRIVATE_KEY"))
+            private_key = serialization.load_der_private_key(private_key_der, password=None)
 
-            encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
+            # ONDC staging public key (DER format)
+            ondc_public_key_der = base64.b64decode("MCowBQYDK2VuAyEAduMuZgmtpjdCuxv+Nc49K0cB6tL/Dj3HZetvVN7ZekM=")
+            public_key = serialization.load_der_public_key(ondc_public_key_der)
 
-            # Load our private key (DER format)
-            private_key = serialization.load_der_private_key(
-                encryption_private_key_bytes,
-                password=None
-            )
-
-            # Load ONDC public key (DER format)
-            ondc_public_key_base64 = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q=" 
-            public_key = serialization.load_der_public_key(base64.b64decode(ondc_public_key_base64))
-
-            # Create shared key
             shared_key = private_key.exchange(public_key)
 
-            # Decrypt
             cipher = AES.new(shared_key, AES.MODE_ECB)
-            decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
-            from Crypto.Util.Padding import unpad
-            decrypted_challenge = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+            decrypted = cipher.decrypt(base64.b64decode(encrypted_challenge))
+            challenge_answer = unpad(decrypted, AES.block_size).decode('utf-8')
 
-            return JsonResponse({"answer": decrypted_challenge})
-
+            return JsonResponse({"answer": challenge_answer})
         except Exception as e:
-            print("----- ERROR in /on_subscribe -----")
+            import traceback
             traceback.print_exc()
             return JsonResponse({"error": str(e)}, status=500)
 
