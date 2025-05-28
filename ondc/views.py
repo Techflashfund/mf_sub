@@ -204,11 +204,11 @@ def on_subscribe(request):
         encrypted_challenge = payload["challenge"]
 
         # 1) Load your X25519 private key
-        priv_der = base64.b64decode(os.getenv("Encryption_Privatekey"))
+        priv_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
         priv = serialization.load_der_private_key(priv_der, password=None)
 
         # 2) Load ONDC’s X25519 public key
-        pub_der = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
+        pub_der = base64.b64decode("MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q=")
         pub = serialization.load_der_public_key(pub_der)
 
         # 3) ECDH: raw 32-byte shared secret
