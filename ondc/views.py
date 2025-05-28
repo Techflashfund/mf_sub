@@ -172,7 +172,7 @@ def on_subscribe(request):
             encrypted_challenge = data.get("challenge")
 
             # Load encryption private key (correct way)
-            encryption_private_key_base64 = os.getenv("Encryption_Privatekey")
+            encryption_private_key_base64 = "MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV"
             encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
 
             private_key = serialization.load_der_private_key(
@@ -181,7 +181,7 @@ def on_subscribe(request):
             )
 
             # Load ONDC public key
-            ondc_public_key_bytes = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
+            ondc_public_key_bytes = base64.b64decode("MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q=")
             public_key = serialization.load_der_public_key(ondc_public_key_bytes)
 
             # Generate shared key
