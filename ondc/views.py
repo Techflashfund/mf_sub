@@ -91,72 +91,113 @@ from Crypto.Util.Padding import unpad
 
 ONDC_PUBLIC_KEY_BASE64 = "MCowBQYDK2VuAyEAa9Wbpvd9SsrpOZFcynyt/TO3x0Yrqyys4NUGIvyxX2Q="
 
+# def decrypt_challenge(encrypted_challenge, shared_key):
+#     cipher = AES.new(shared_key, AES.MODE_ECB)
+#     decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
+#     return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+
+# import base64
+# import json
+import traceback
+# import logging
+
+# from django.http import JsonResponse
+# from django.views.decorators.csrf import csrf_exempt
+
+# from cryptography.hazmat.primitives import serialization
+# from Crypto.Cipher import AES
+# from Crypto.Util.Padding import unpad
+
+# logging.basicConfig(level=logging.DEBUG)
+
+# @csrf_exempt
+# def on_subscribe(request):
+#     if request.method != "POST":
+#         return JsonResponse({"error": "Invalid request method"}, status=400)
+
+#     try:
+#         data = json.loads(request.body)
+#         encrypted_challenge = data.get("challenge")
+#         if not encrypted_challenge:
+#             return JsonResponse({"error": "Missing 'challenge' in request"}, status=400)
+
+#         logging.debug(f"Encrypted challenge (base64): {encrypted_challenge}")
+
+#         # Load your private key from DER base64 string (hardcoded here for demo)
+#         private_key_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
+#         private_key = serialization.load_der_private_key(private_key_der, password=None)
+
+#         # Load ONDC public key (staging, DER base64)
+#         ondc_public_key_der = base64.b64decode("MCowBQYDK2VuAyEAduMuZgmtpjdCuxv+Nc49K0cB6tL/Dj3HZetvVN7ZekM=")
+#         ondc_public_key = serialization.load_der_public_key(ondc_public_key_der)
+
+#         # Perform X25519 key exchange to get shared key
+#         shared_key = private_key.exchange(ondc_public_key)
+#         logging.debug(f"Shared key (hex): {shared_key.hex()}")
+
+#         encrypted_bytes = base64.b64decode(encrypted_challenge)
+#         logging.debug(f"Encrypted challenge bytes (hex): {encrypted_bytes.hex()}")
+
+#         # AES ECB decrypt
+#         cipher = AES.new(shared_key, AES.MODE_ECB)
+#         decrypted_bytes = cipher.decrypt(encrypted_bytes)
+#         logging.debug(f"Decrypted bytes (hex): {decrypted_bytes.hex()}")
+
+#         # Try unpadding, fallback to stripping null bytes if padding is incorrect
+#         try:
+#             challenge_answer = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
+#         except ValueError:
+#             logging.warning("PKCS#7 padding incorrect, using fallback decoding")
+#             challenge_answer = decrypted_bytes.rstrip(b"\x00").decode('utf-8', errors='ignore')
+
+#         logging.debug(f"Decrypted challenge answer (fallback applied if needed): {challenge_answer}")
+
+#         return JsonResponse({"answer": challenge_answer})
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return JsonResponse({"error": str(e)}, status=500)
+
+
 def decrypt_challenge(encrypted_challenge, shared_key):
     cipher = AES.new(shared_key, AES.MODE_ECB)
     decrypted_bytes = cipher.decrypt(base64.b64decode(encrypted_challenge))
     return unpad(decrypted_bytes, AES.block_size).decode('utf-8')
 
-import base64
-import json
-import traceback
-import logging
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-
-from cryptography.hazmat.primitives import serialization
-from Crypto.Cipher import AES
-from Crypto.Util.Padding import unpad
-
-logging.basicConfig(level=logging.DEBUG)
-
 @csrf_exempt
 def on_subscribe(request):
-    if request.method != "POST":
-        return JsonResponse({"error": "Invalid request method"}, status=400)
-
-    try:
-        data = json.loads(request.body)
-        encrypted_challenge = data.get("challenge")
-        if not encrypted_challenge:
-            return JsonResponse({"error": "Missing 'challenge' in request"}, status=400)
-
-        logging.debug(f"Encrypted challenge (base64): {encrypted_challenge}")
-
-        # Load your private key from DER base64 string (hardcoded here for demo)
-        private_key_der = base64.b64decode("MC4CAQAwBQYDK2VuBCIEIADbh3FyDd79n+ZVLBoblozxS9TC/qO+0XLPJA6Ca8xV")
-        private_key = serialization.load_der_private_key(private_key_der, password=None)
-
-        # Load ONDC public key (staging, DER base64)
-        ondc_public_key_der = base64.b64decode("MCowBQYDK2VuAyEAduMuZgmtpjdCuxv+Nc49K0cB6tL/Dj3HZetvVN7ZekM=")
-        ondc_public_key = serialization.load_der_public_key(ondc_public_key_der)
-
-        # Perform X25519 key exchange to get shared key
-        shared_key = private_key.exchange(ondc_public_key)
-        logging.debug(f"Shared key (hex): {shared_key.hex()}")
-
-        encrypted_bytes = base64.b64decode(encrypted_challenge)
-        logging.debug(f"Encrypted challenge bytes (hex): {encrypted_bytes.hex()}")
-
-        # AES ECB decrypt
-        cipher = AES.new(shared_key, AES.MODE_ECB)
-        decrypted_bytes = cipher.decrypt(encrypted_bytes)
-        logging.debug(f"Decrypted bytes (hex): {decrypted_bytes.hex()}")
-
-        # Try unpadding, fallback to stripping null bytes if padding is incorrect
+    if request.method == "POST":
         try:
-            challenge_answer = unpad(decrypted_bytes, AES.block_size).decode('utf-8')
-        except ValueError:
-            logging.warning("PKCS#7 padding incorrect, using fallback decoding")
-            challenge_answer = decrypted_bytes.rstrip(b"\x00").decode('utf-8', errors='ignore')
+            data = json.loads(request.body)
+            encrypted_challenge = data.get("challenge")
 
-        logging.debug(f"Decrypted challenge answer (fallback applied if needed): {challenge_answer}")
+            # Load encryption private key (correct way)
+            encryption_private_key_base64 = os.getenv("Encryption_Privatekey")
+            encryption_private_key_bytes = base64.b64decode(encryption_private_key_base64)
 
-        return JsonResponse({"answer": challenge_answer})
+            private_key = serialization.load_der_private_key(
+                encryption_private_key_bytes,
+                password=None
+            )
 
-    except Exception as e:
-        traceback.print_exc()
-        return JsonResponse({"error": str(e)}, status=500)
+            # Load ONDC public key
+            ondc_public_key_bytes = base64.b64decode(ONDC_PUBLIC_KEY_BASE64)
+            public_key = serialization.load_der_public_key(ondc_public_key_bytes)
+
+            # Generate shared key
+            shared_key = private_key.exchange(public_key)
+
+            # Decrypt the challenge
+            decrypted_challenge = decrypt_challenge(encrypted_challenge, shared_key)
+
+            return JsonResponse({"answer": decrypted_challenge})
+
+        except Exception as e:
+            traceback.print_exc()
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
+
 
 
 
